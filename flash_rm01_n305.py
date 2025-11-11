@@ -179,9 +179,9 @@ def flash_image(disk, image_path):
     print_warning("此过程可能需要较长时间，请耐心等待...")
     print_warning("This process may take a while, please be patient...")
     
-    # 使用dd命令刷写，real_time=True 以实时显示进度条
-    cmd = ["dd", f"if={image_path}", f"of=/dev/{disk}", "bs=4M", "status=progress"]
-    run_command(cmd, real_time=True)
+    # 使用dd命令刷写，使用shell=True以确保参数格式正确，real_time=True以实时显示进度条
+    cmd = f"dd if={image_path} of=/dev/{disk} bs=4M status=progress"
+    run_command(cmd, real_time=True, shell=True)
     
     print_success("镜像刷写完成")
 
