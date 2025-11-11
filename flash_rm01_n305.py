@@ -219,6 +219,7 @@ def resize_partition(disk):
     
     # 尝试使用sgdisk扩展GPT（如果可用）
     sgdisk_available = False
+    gpt_expanded = False
     try:
         # 检查sgdisk是否可用
         subprocess.run(["which", "sgdisk"], check=True, capture_output=True)
@@ -231,14 +232,15 @@ def resize_partition(disk):
         result = run_command(sgdisk_cmd, real_time=True, check=False)
         if result.returncode == 0:
             print_success("GPT分区表已扩展")
+            gpt_expanded = True
         else:
             print_warning("sgdisk扩展GPT失败，尝试使用parted方法...")
-            # 使用parted获取磁盘大小并设置分区
-            _resize_partition_with_parted(disk)
-    else:
-        # 如果没有sgdisk，使用parted方法
-        print_info("使用parted方法扩展分区...")
-        _resize_partition_with_parted(disk)
+    
+    # 无论GPT是否扩展，都需要调整分区大小
+    # 使用parted方法调整分区大小
+    print_info("调整分区2的大小到100%...")
+    print_info("Resizing partition 2 to 100%...")
+    _resize_partition_with_parted(disk)
     
     # 再次检查分区
     print_info("确认分区大小...")
@@ -250,7 +252,17 @@ def resize_partition(disk):
 
 def _resize_partition_with_parted(disk):
     """使用parted扩展分区（备用方法）"""
-    # 获取磁盘总大小（以扇区为单位）
+    # 首先尝试使用100%（最简单的方法）
+    print_info("尝试将分区2扩展到100%...")
+    resize_cmd_100 = ["parted", "--script", f"/dev/{disk}", "resizepart", "2", "100%"]
+    result = run_command(resize_cmd_100, real_time=True, check=False)
+    
+    if result.returncode == 0:
+        print_success("分区已扩展到100%")
+        return
+    
+    # 如果100%失败，尝试使用扇区数
+    print_warning("使用100%失败，尝试使用扇区数...")
     print_info("获取磁盘总大小...")
     unit_cmd = ["parted", "--script", f"/dev/{disk}", "unit", "s", "print"]
     result = run_command(unit_cmd, real_time=False)
@@ -260,20 +272,23 @@ def _resize_partition_with_parted(disk):
     disk_size_match = re.search(rf'Disk /dev/{disk}: (\d+)s', result.stdout)
     if disk_size_match:
         disk_size_sectors = disk_size_match.group(1)
-        # 减去1个扇区，因为分区结束位置是包含的
-        end_sector = str(int(disk_size_sectors) - 1) + "s"
+        # 减去34个扇区（GPT备份表占用），确保安全
+        # GPT备份表通常占用最后33个扇区，我们留一些余量
+        end_sector = str(int(disk_size_sectors) - 34) + "s"
         print_info(f"磁盘总大小: {disk_size_sectors} 扇区")
-        print_info(f"设置分区2结束位置: {end_sector}")
+        print_info(f"设置分区2结束位置: {end_sector} (保留34个扇区给GPT备份表)")
         
         # 调整分区大小到磁盘末尾
         resize_cmd = ["parted", "--script", f"/dev/{disk}", "unit", "s", "resizepart", "2", end_sector]
-        run_command(resize_cmd, real_time=True)
-        print_success("分区已扩展到磁盘末尾")
+        result = run_command(resize_cmd, real_time=True, check=False)
+        if result.returncode == 0:
+            print_success("分区已扩展到磁盘末尾")
+        else:
+            print_error("分区扩展失败，请检查错误信息")
+            raise subprocess.CalledProcessError(result.returncode, resize_cmd)
     else:
-        # 如果无法解析，尝试使用100%
-        print_warning("无法解析磁盘大小，尝试使用100%...")
-        resize_cmd = ["parted", "--script", f"/dev/{disk}", "resizepart", "2", "100%"]
-        run_command(resize_cmd, real_time=True)
+        print_error("无法解析磁盘大小，分区扩展失败")
+        raise RuntimeError("无法解析磁盘大小")
 
 
 def resize_filesystem(disk):
