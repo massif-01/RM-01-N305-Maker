@@ -213,7 +213,7 @@ def resize_partition(disk):
     check_cmd = ["parted", "--script", f"/dev/{disk}", "print"]
     run_command(check_cmd, real_time=True)
     
-    # 扩展GPT分区表以使用所有可用空间
+    # 扩展GPT分区表以使用所有可用空间（必须先扩展GPT，才能扩展分区）
     print_info("扩展GPT分区表以使用所有可用空间...")
     print_info("Expanding GPT partition table to use all available space...")
     
@@ -234,15 +234,17 @@ def resize_partition(disk):
             print_success("GPT分区表已扩展")
             gpt_expanded = True
         else:
-            print_warning("sgdisk扩展GPT失败，尝试使用parted方法...")
+            print_warning(f"sgdisk扩展GPT返回退出码 {result.returncode}，但继续尝试扩展分区...")
+    else:
+        print_warning("sgdisk不可用，跳过GPT扩展步骤...")
+        print_warning("如果分区扩展失败，请安装sgdisk: sudo apt-get install gdisk")
     
-    # 无论GPT是否扩展，都需要调整分区大小
-    # 使用parted方法调整分区大小
+    # 调整分区大小（必须在GPT扩展后执行）
     print_info("调整分区2的大小到100%...")
     print_info("Resizing partition 2 to 100%...")
     _resize_partition_with_parted(disk)
     
-    # 再次检查分区
+    # 再次检查分区以确认扩展成功
     print_info("确认分区大小...")
     print_info("Verifying partition size...")
     run_command(check_cmd, real_time=True)
@@ -251,18 +253,21 @@ def resize_partition(disk):
 
 
 def _resize_partition_with_parted(disk):
-    """使用parted扩展分区（备用方法）"""
-    # 首先尝试使用100%（最简单的方法）
-    print_info("尝试将分区2扩展到100%...")
-    resize_cmd_100 = ["parted", "--script", f"/dev/{disk}", "resizepart", "2", "100%"]
-    result = run_command(resize_cmd_100, real_time=True, check=False)
+    """使用parted扩展分区"""
+    # 直接使用100%（根据手动操作，这是最简单有效的方法）
+    print_info("使用parted将分区2扩展到100%...")
+    resize_cmd = ["parted", "--script", f"/dev/{disk}", "resizepart", "2", "100%"]
+    result = run_command(resize_cmd, real_time=True, check=False)
     
     if result.returncode == 0:
-        print_success("分区已扩展到100%")
+        print_success("分区已成功扩展到100%")
         return
     
-    # 如果100%失败，尝试使用扇区数
-    print_warning("使用100%失败，尝试使用扇区数...")
+    # 如果100%失败，显示错误并尝试使用扇区数方法
+    print_error(f"使用100%扩展分区失败（退出码: {result.returncode}）")
+    # 注意：real_time=True 时 stderr 不会被捕获，错误信息已实时显示
+    
+    print_warning("尝试使用扇区数方法...")
     print_info("获取磁盘总大小...")
     unit_cmd = ["parted", "--script", f"/dev/{disk}", "unit", "s", "print"]
     result = run_command(unit_cmd, real_time=False)
@@ -285,6 +290,7 @@ def _resize_partition_with_parted(disk):
             print_success("分区已扩展到磁盘末尾")
         else:
             print_error("分区扩展失败，请检查错误信息")
+            # 注意：real_time=True 时 stderr 不会被捕获，错误信息已实时显示
             raise subprocess.CalledProcessError(result.returncode, resize_cmd)
     else:
         print_error("无法解析磁盘大小，分区扩展失败")
