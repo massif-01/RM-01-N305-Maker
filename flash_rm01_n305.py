@@ -10,6 +10,7 @@ import sys
 import os
 import argparse
 import time
+import re
 from pathlib import Path
 
 
@@ -207,31 +208,72 @@ def resize_partition(disk):
     print_info("扩展根分区...")
     print_info("Resizing root partition...")
     
-    # 使用parted扩展分区
-    print_info("使用parted工具扩展分区...")
-    
     # 首先检查分区表（使用--script避免交互式提示）
+    print_info("检查当前分区表...")
     check_cmd = ["parted", "--script", f"/dev/{disk}", "print"]
-    result = run_command(check_cmd, real_time=True)
+    run_command(check_cmd, real_time=True)
     
-    # 修复GPT（如果需要）
-    print_info("检查并修复GPT分区表...")
-    fix_cmd = ["parted", "--script", f"/dev/{disk}", "fix"]
+    # 扩展GPT分区表以使用所有可用空间
+    print_info("扩展GPT分区表以使用所有可用空间...")
+    print_info("Expanding GPT partition table to use all available space...")
+    
+    # 尝试使用sgdisk扩展GPT（如果可用）
+    sgdisk_available = False
     try:
-        run_command(fix_cmd, real_time=True)
-    except subprocess.CalledProcessError:
-        print_warning("GPT修复可能需要手动确认，继续执行...")
+        # 检查sgdisk是否可用
+        subprocess.run(["which", "sgdisk"], check=True, capture_output=True)
+        sgdisk_available = True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass
     
-    # 调整分区大小
-    print_info("调整分区2的大小到100%...")
-    resize_cmd = ["parted", "--script", f"/dev/{disk}", "resizepart", "2", "100%"]
-    run_command(resize_cmd, real_time=True)
+    if sgdisk_available:
+        sgdisk_cmd = ["sgdisk", "-e", f"/dev/{disk}"]
+        result = run_command(sgdisk_cmd, real_time=True, check=False)
+        if result.returncode == 0:
+            print_success("GPT分区表已扩展")
+        else:
+            print_warning("sgdisk扩展GPT失败，尝试使用parted方法...")
+            # 使用parted获取磁盘大小并设置分区
+            _resize_partition_with_parted(disk)
+    else:
+        # 如果没有sgdisk，使用parted方法
+        print_info("使用parted方法扩展分区...")
+        _resize_partition_with_parted(disk)
     
     # 再次检查分区
     print_info("确认分区大小...")
+    print_info("Verifying partition size...")
     run_command(check_cmd, real_time=True)
     
     print_success("分区扩展完成")
+
+
+def _resize_partition_with_parted(disk):
+    """使用parted扩展分区（备用方法）"""
+    # 获取磁盘总大小（以扇区为单位）
+    print_info("获取磁盘总大小...")
+    unit_cmd = ["parted", "--script", f"/dev/{disk}", "unit", "s", "print"]
+    result = run_command(unit_cmd, real_time=False)
+    
+    # 从输出中提取磁盘总扇区数
+    # 输出格式: "Disk /dev/sda: 1000215216s"
+    disk_size_match = re.search(rf'Disk /dev/{disk}: (\d+)s', result.stdout)
+    if disk_size_match:
+        disk_size_sectors = disk_size_match.group(1)
+        # 减去1个扇区，因为分区结束位置是包含的
+        end_sector = str(int(disk_size_sectors) - 1) + "s"
+        print_info(f"磁盘总大小: {disk_size_sectors} 扇区")
+        print_info(f"设置分区2结束位置: {end_sector}")
+        
+        # 调整分区大小到磁盘末尾
+        resize_cmd = ["parted", "--script", f"/dev/{disk}", "unit", "s", "resizepart", "2", end_sector]
+        run_command(resize_cmd, real_time=True)
+        print_success("分区已扩展到磁盘末尾")
+    else:
+        # 如果无法解析，尝试使用100%
+        print_warning("无法解析磁盘大小，尝试使用100%...")
+        resize_cmd = ["parted", "--script", f"/dev/{disk}", "resizepart", "2", "100%"]
+        run_command(resize_cmd, real_time=True)
 
 
 def resize_filesystem(disk):
