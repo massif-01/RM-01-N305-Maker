@@ -1,0 +1,15 @@
+# RM-01 N305 SSD Auto Flash Tool Requirements
+# This script uses only Python standard library modules
+# No external dependencies are required
+
+# Python 3.6+ is required
+# Required system tools (must be installed on the system):
+# - lsblk
+# - umount
+# - wipefs
+# - dd
+# - sync
+# - parted
+# - e2fsck
+# - resize2fs
+
