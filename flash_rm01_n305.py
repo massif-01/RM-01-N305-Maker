@@ -210,26 +210,26 @@ def resize_partition(disk):
     # 使用parted扩展分区
     print_info("使用parted工具扩展分区...")
     
-    # 首先检查分区表
-    check_cmd = ["parted", f"/dev/{disk}", "print"]
-    result = run_command(check_cmd)
+    # 首先检查分区表（使用--script避免交互式提示）
+    check_cmd = ["parted", "--script", f"/dev/{disk}", "print"]
+    result = run_command(check_cmd, real_time=True)
     
     # 修复GPT（如果需要）
     print_info("检查并修复GPT分区表...")
-    fix_cmd = ["parted", f"/dev/{disk}", "fix"]
+    fix_cmd = ["parted", "--script", f"/dev/{disk}", "fix"]
     try:
-        run_command(fix_cmd)
+        run_command(fix_cmd, real_time=True)
     except subprocess.CalledProcessError:
         print_warning("GPT修复可能需要手动确认，继续执行...")
     
     # 调整分区大小
     print_info("调整分区2的大小到100%...")
-    resize_cmd = ["parted", f"/dev/{disk}", "resizepart", "2", "100%"]
-    run_command(resize_cmd)
+    resize_cmd = ["parted", "--script", f"/dev/{disk}", "resizepart", "2", "100%"]
+    run_command(resize_cmd, real_time=True)
     
     # 再次检查分区
     print_info("确认分区大小...")
-    run_command(check_cmd)
+    run_command(check_cmd, real_time=True)
     
     print_success("分区扩展完成")
 
@@ -240,13 +240,13 @@ def resize_filesystem(disk):
     print_info(f"调整文件系统大小 /dev/{partition}...")
     print_info(f"Resizing filesystem /dev/{partition}...")
     
-    # 检查文件系统
+    # 检查文件系统（使用-y自动确认）
     print_info("检查文件系统...")
-    run_command(["e2fsck", "-f", f"/dev/{partition}"])
+    run_command(["e2fsck", "-f", "-y", f"/dev/{partition}"], real_time=True)
     
     # 调整文件系统大小
     print_info("调整文件系统大小...")
-    run_command(["resize2fs", f"/dev/{partition}"])
+    run_command(["resize2fs", f"/dev/{partition}"], real_time=True)
     
     print_success("文件系统调整完成")
 
