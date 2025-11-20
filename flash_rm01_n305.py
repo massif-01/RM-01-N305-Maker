@@ -211,9 +211,61 @@ def flash_image(disk, image_path):
     print_warning("此过程可能需要较长时间，请耐心等待...")
     print_warning("This process may take a while, please be patient...")
     
+    # 刷新输出缓冲区，确保信息显示
+    sys.stdout.flush()
+    sys.stderr.flush()
+    
     # 使用dd命令刷写，使用shell=True以确保参数格式正确，real_time=True以实时显示进度条
     cmd = f"dd if={image_path} of=/dev/{disk} bs=4M status=progress"
-    run_command(cmd, real_time=True, shell=True)
+    try:
+        print_info(f"镜像文件: {image_path}")
+        print_info(f"目标设备: /dev/{disk}")
+        sys.stdout.flush()
+        
+        result = run_command(cmd, real_time=True, shell=True, check=False)
+        
+        # 刷新输出缓冲区
+        sys.stdout.flush()
+        sys.stderr.flush()
+        
+        if result.returncode != 0:
+            print_error(f"\n刷写失败！dd命令退出码: {result.returncode}")
+            print_error("请检查以下项目:")
+            print_error(f"1. 镜像文件是否存在且可读: {image_path}")
+            if not os.path.exists(image_path):
+                print_error(f"   ❌ 文件不存在")
+            elif not os.access(image_path, os.R_OK):
+                print_error(f"   ❌ 文件不可读")
+            else:
+                print_error(f"   ✓ 文件存在且可读")
+            
+            print_error(f"2. 目标设备是否存在且可写: /dev/{disk}")
+            if not os.path.exists(f"/dev/{disk}"):
+                print_error(f"   ❌ 设备不存在")
+            elif not os.access(f"/dev/{disk}", os.W_OK):
+                print_error(f"   ❌ 设备不可写（可能需要root权限）")
+            else:
+                print_error(f"   ✓ 设备存在")
+            
+            print_error("3. 是否有足够的磁盘空间")
+            print_error("4. 目标设备是否被其他进程占用")
+            raise subprocess.CalledProcessError(result.returncode, cmd)
+    except subprocess.CalledProcessError as e:
+        print_error(f"\n刷写镜像失败: {e}")
+        sys.stdout.flush()
+        sys.stderr.flush()
+        raise
+    except Exception as e:
+        print_error(f"\n刷写镜像时发生未知错误: {e}")
+        import traceback
+        print_error(traceback.format_exc())
+        sys.stdout.flush()
+        sys.stderr.flush()
+        raise
+    
+    # 再次刷新输出缓冲区
+    sys.stdout.flush()
+    sys.stderr.flush()
     
     print_success("镜像刷写完成")
 
