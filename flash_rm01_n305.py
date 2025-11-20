@@ -322,7 +322,7 @@ def main():
     parser.add_argument(
         '-i', '--image',
         type=str,
-        default='/home/rm01/image/n305rm01.img',
+        default=os.path.expanduser('~/n305rm01.img'),
         help='镜像文件路径 / Image file path'
     )
     parser.add_argument(
