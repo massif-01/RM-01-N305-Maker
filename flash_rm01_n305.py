@@ -112,6 +112,27 @@ def run_command(cmd, check=True, shell=False, input_text=None, real_time=False):
         raise
 
 
+def get_user_home():
+    """获取原始用户的主目录（即使在sudo环境下）"""
+    # 优先使用SUDO_USER环境变量（sudo运行时）
+    sudo_user = os.environ.get('SUDO_USER')
+    if sudo_user:
+        # 获取sudo用户的主目录
+        import pwd
+        try:
+            return pwd.getpwnam(sudo_user).pw_dir
+        except KeyError:
+            pass
+    
+    # 使用HOME环境变量（如果存在且不是/root）
+    home = os.environ.get('HOME')
+    if home and home != '/root':
+        return home
+    
+    # 最后使用当前用户的主目录
+    return os.path.expanduser('~')
+
+
 def check_sudo():
     """检查是否有sudo权限"""
     if os.geteuid() != 0:
@@ -171,8 +192,18 @@ def wipe_disk(disk):
 
 def flash_image(disk, image_path):
     """刷写镜像"""
+    # 如果路径包含~，先展开它
+    if image_path.startswith('~'):
+        user_home = get_user_home()
+        image_path = image_path.replace('~', user_home, 1)
+    
     if not os.path.exists(image_path):
         print_error(f"镜像文件不存在: {image_path}")
+        # 提示可能的路径
+        user_home = get_user_home()
+        suggested_path = os.path.join(user_home, 'n305rm01.img')
+        print_info(f"提示: 请检查镜像文件路径，或使用 -i 参数指定完整路径")
+        print_info(f"例如: -i {suggested_path}")
         sys.exit(1)
     
     print_info(f"开始刷写镜像到 /dev/{disk}...")
@@ -322,8 +353,8 @@ def main():
     parser.add_argument(
         '-i', '--image',
         type=str,
-        default=os.path.expanduser('~/n305rm01.img'),
-        help='镜像文件路径 / Image file path'
+        default=None,
+        help='镜像文件路径 / Image file path (默认: ~/n305rm01.img)'
     )
     parser.add_argument(
         '-d', '--disk',
@@ -351,6 +382,15 @@ def main():
     
     # 检查sudo权限
     check_sudo()
+    
+    # 处理镜像文件路径
+    if args.image:
+        image_path = args.image
+    else:
+        # 使用原始用户的主目录（即使在sudo环境下）
+        user_home = get_user_home()
+        image_path = os.path.join(user_home, 'n305rm01.img')
+        print_info(f"使用默认镜像路径: {image_path}")
     
     # 获取磁盘名称
     if args.disk:
@@ -381,7 +421,7 @@ def main():
         wipe_disk(disk)
         
         # 步骤3: 刷写镜像
-        flash_image(disk, args.image)
+        flash_image(disk, image_path)
         
         # 步骤4: 同步
         sync_disk()
