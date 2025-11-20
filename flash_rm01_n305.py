@@ -182,7 +182,7 @@ def wipe_disk(disk):
     print_info(f"Wiping partition table and data from /dev/{disk}...")
     
     confirm = input(f"\n警告: 这将清除 /dev/{disk} 上的所有数据！确认继续? (yes/no): ")
-    if confirm.lower() != 'yes':
+    if confirm.lower() not in ('yes', 'y'):
         print_warning("操作已取消")
         sys.exit(0)
     
@@ -409,7 +409,7 @@ def main():
         print("5. 调整文件系统 / Resize filesystem")
         
         confirm = input("\n确认继续? (yes/no): ")
-        if confirm.lower() != 'yes':
+        if confirm.lower() not in ('yes', 'y'):
             print_warning("操作已取消")
             sys.exit(0)
     
