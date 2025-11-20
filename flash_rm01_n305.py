@@ -45,6 +45,28 @@ def print_warning(msg):
 def print_error(msg):
     """打印错误信息"""
     print(f"{Colors.FAIL}[ERROR]{Colors.ENDC} {msg}")
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+
+def safe_input(prompt):
+    """安全的输入函数，确保输出刷新并处理异常"""
+    try:
+        # 确保输出刷新
+        sys.stdout.flush()
+        sys.stderr.flush()
+        # 尝试读取输入
+        result = input(prompt)
+        sys.stdout.flush()
+        sys.stderr.flush()
+        return result
+    except (EOFError, KeyboardInterrupt) as e:
+        # 处理 Ctrl+C 或 EOF
+        print_error("\n输入被中断")
+        sys.exit(1)
+    except Exception as e:
+        print_error(f"输入时发生错误: {e}")
+        sys.exit(1)
 
 
 def print_logo():
@@ -149,7 +171,7 @@ def get_disk_name():
     result = run_command(["lsblk"], check=False)
     print(result.stdout)
     
-    disk_name = input("\n请输入要刷写的磁盘名称 (例如: sda): ").strip()
+    disk_name = safe_input("\n请输入要刷写的磁盘名称 (例如: sda): ").strip()
     if not disk_name:
         print_error("磁盘名称不能为空")
         sys.exit(1)
@@ -181,7 +203,7 @@ def wipe_disk(disk):
     print_info(f"清除磁盘 /dev/{disk} 的分区表和数据...")
     print_info(f"Wiping partition table and data from /dev/{disk}...")
     
-    confirm = input(f"\n警告: 这将清除 /dev/{disk} 上的所有数据！确认继续? (yes/no): ")
+    confirm = safe_input(f"\n警告: 这将清除 /dev/{disk} 上的所有数据！确认继续? (yes/no): ")
     if confirm.lower() not in ('yes', 'y'):
         print_warning("操作已取消")
         sys.exit(0)
@@ -460,7 +482,7 @@ def main():
         print("4. 扩展分区 / Resize partition")
         print("5. 调整文件系统 / Resize filesystem")
         
-        confirm = input("\n确认继续? (yes/no): ")
+        confirm = safe_input("\n确认继续? (yes/no): ")
         if confirm.lower() not in ('yes', 'y'):
             print_warning("操作已取消")
             sys.exit(0)

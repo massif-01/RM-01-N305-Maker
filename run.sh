@@ -20,15 +20,20 @@ if [ ! -f "$PYTHON_SCRIPT" ]; then
     exit 1
 fi
 
+# 设置环境变量以确保终端交互正常
+export PYTHONUNBUFFERED=1
+export TERM="${TERM:-xterm-256color}"
+
 # 检查是否有sudo权限
 if [ "$EUID" -ne 0 ]; then
     echo "提示: 此脚本需要root权限，将使用sudo运行"
     echo "Note: This script requires root privileges, will run with sudo"
     echo ""
-    # 使用sudo运行Python脚本，并传递所有参数
-    sudo python3 "$PYTHON_SCRIPT" "$@"
+    # 使用sudo运行Python脚本，并传递所有参数和环境变量
+    # 使用 -E 保留环境变量，使用 -u 禁用Python输出缓冲
+    sudo -E python3 -u "$PYTHON_SCRIPT" "$@"
 else
-    # 已经有root权限，直接运行
-    python3 "$PYTHON_SCRIPT" "$@"
+    # 已经有root权限，直接运行（使用 -u 禁用Python输出缓冲）
+    python3 -u "$PYTHON_SCRIPT" "$@"
 fi
 
